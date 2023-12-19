@@ -1,0 +1,11 @@
+Title, Image file, product 1, product 2, product 3
+Grocery Store, com1, Milk, Bread, Eggs
+Bookstore, com2, Novel, Magazine, Notebook
+Pharmacy, com3, Aspirin, Band-Aid, Syrup
+Pet Shop, com4, Kibble, Toy, Tank
+Florist, com5, Roses, Lilies, Orchids
+Hardware Store, com6, Hammer, Nails, Screwdriver
+Clothing Store, com7, Shirt, Pants, Jacket
+Toy Store, com8, Doll, Puzzle, Lego
+Music Store, com9, Guitar, Piano, CD
+Jewelers, com10, Ring, Necklace, Earring
