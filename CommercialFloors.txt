@@ -1,8 +1,8 @@
 Title, Image file, product 1, product 2, product 3
 Grocery Store, com1, Milk, Bread, Eggs
 Bookstore, com2, Novel, Magazine, Notebook
-Pharmacy, com3, Aspirin, Band-Aid, Syrup
-Pet Shop, com4, Kibble, Toy, Tank
+Pharmacy, com3, Advil, Shampoo, Band-Aids
+Pet Shop, com4, Kibble, Squeaker, Leash
 Florist, com5, Roses, Lilies, Orchids
 Hardware Store, com6, Hammer, Nails, Screwdriver
 Clothing Store, com7, Shirt, Pants, Jacket

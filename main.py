@@ -30,7 +30,7 @@ tick = 0
 menuOpen = False
 showFloorButtons = False
 showCitizenList = False
-showNewCitizen = True
+showNewCitizen = False
 sortList = "default"
 floorMenu = -1
 
@@ -44,11 +44,30 @@ floorImages = [
     pygame.image.load("images/residential/res2.png"),
 ]
 
+commercialFloorImages = [
+    pygame.image.load("images/commerical/com1.png"),
+    pygame.image.load("images/commerical/com2.png"),
+    pygame.image.load("images/commerical/com3.png"),
+    pygame.image.load("images/commerical/com4.png"),
+    pygame.image.load("images/commerical/com5.png"),
+    pygame.image.load("images/commerical/com6.png"),
+    pygame.image.load("images/commerical/com7.png"),
+]
+
+commercialFloorTypes = []
+
+
 for image in range(len(floorImages)):
     # resize images
     floorImages[image] = floorImages[image].convert()
     floorImgRect = floorImages[image].get_rect()
     floorImages[image] = pygame.transform.scale(floorImages[image], (300, 100))
+
+for image in range(len(commercialFloorImages)):
+    # resize images
+    commercialFloorImages[image] = commercialFloorImages[image].convert()
+    commercialFloorImgRect = commercialFloorImages[image].get_rect()
+    commercialFloorImages[image] = pygame.transform.scale(commercialFloorImages[image], (300, 100))
 
 elevatorImage = pygame.image.load("images/elevator.png")
 elevatorImage = pygame.transform.scale(elevatorImage, (300, 100))
@@ -131,7 +150,28 @@ class Product:
         self.name = name
         self.price = price
         self.image = image
-        
+
+# from CommercialFloors.txt, get all floor types, images, and products
+# store in multi dimensional commercialFloorTypes list
+for line in open("CommercialFloors.txt", "r").read().split("\n"):
+    if line != "Title, Image file, product 1, product 2, product 3": # ignore first line
+        # Format: Title, Image file, product 1, product 2, product 3
+        commercialFloorTypes.append(line.split(", "))
+
+        # set image if it exists
+        if os.path.exists("images/commerical/" + line.split(", ")[1]):
+            commercialFloorImages.append(pygame.image.load("images/commerical/" + line.split(", ")[1]))
+
+        # set products if they exist
+        for i in range(2, len(line.split(", "))):
+            productTitle = line.split(", ")[i]
+            productTitle = productTitle.lower()
+            if os.path.exists("images/products/" + productTitle + ".png"):
+                commercialFloorTypes[-1][i] = Product(productTitle, productTitle.split(" ")[-1], pygame.image.load("images/products/" + productTitle + ".png"))
+
+            else:
+                commercialFloorTypes[-1][i] = Product("placeholder", "0", pygame.image.load("images/closebutton.png"))
+
 class Floor:
     def __init__(self, floor_number, image = None, title = None):
         self.floor_number = floor_number
@@ -158,12 +198,20 @@ class ResidentialFloor(Floor):
 
 class CommercialFloor(Floor):
     RESTOCKING_PRICE = 100
-    def __init__(self, floor_number, products = [None, None, None], stock = [0, 0, 0]):
+    def __init__(self, floor_number, type):
         super().__init__(floor_number)
         self.floor_color = (0, 255, 0)
         self.employees = []
-        self.products = products
-        self.stock = stock
+        self.products = [None, None, None]
+        self.stock = [0, 0, 0]
+    
+        # get floor info from CommercialFloorTypes
+        for i in range(len(commercialFloorTypes)):
+            if commercialFloorTypes[i][0] == type:
+                self.title = commercialFloorTypes[i][0]
+                self.image = commercialFloorImages[i]
+                self.products = [commercialFloorTypes[i][2], commercialFloorTypes[i][3], commercialFloorTypes[i][4]]
+                break
 
     def restock(self, product):
         global money
@@ -231,17 +279,7 @@ def randomizeCitizen(homeFloor, jobFloor):
 
     return Citizen(name, homeFloor, jobFloor, appearance)
 
-# get all images in products folder
-products = []
-for file in os.listdir("images/products"):
-    if file.endswith(".png"):
-        # get product info
-        name = file.split(" ")[0]
-        price = file.split(" ")[1].split(".")[0]
-        image = pygame.image.load("images/products/" + file).convert_alpha()
-        products.append(Product(name, price, image))
-
-Floors = [LobbyFloor(0), ResidentialFloor(1, floorImages[0], "Canterbury"), CommercialFloor(2, [products[0], products[1], products[2]])]
+Floors = [LobbyFloor(0), ResidentialFloor(1, floorImages[0], "Canterbury"), CommercialFloor(2, type="Grocery Store")]
 Citizens = [Citizen("Michael", 2, 1, CitizenAppearance("clothes7", "hair9", "eyes1", "skin7")), 
             Citizen("George", 2, 1, CitizenAppearance("clothes1", "hair1", "eyes2", "skin1")),
             ]
@@ -268,7 +306,6 @@ while True:
         Button(90, 240, 50, 50, (255, 0, 0), bgImage=pygame.image.load("images/placeholderbox.png")),
         Button(150, 240, 50, 50, (255, 0, 0), bgImage=pygame.image.load("images/placeholderbox.png")),
         Button(210, 240, 50, 50, (255, 0, 0), bgImage=pygame.image.load("images/placeholderbox.png")),
-        Button(75, 200, 200, 30, (0, 255, 0), "Manage"),
     ])
 
     citizenListMenu = Menu(0, 0, pygame.image.load("images/purplebg.png"), [
@@ -315,15 +352,16 @@ while True:
                             showCitizenList = True
                             break
                             
-                            
-                
                 if showFloorButtons:
                     for button in range(len(newFloorMenu.buttons)):
                         if newFloorMenu.buttons[button].is_clicked(pos):
                             if button == 0:
                                 Floors.append(ResidentialFloor(len(Floors), random.choice(floorImages), random.choice(residentialNames)))
                             if button == 1:
-                                Floors.append(CommercialFloor(len(Floors), [random.choice(products), random.choice(products), random.choice(products)]))
+                                # get random commercial floor type
+                                randomFloorType = random.choice(commercialFloorTypes)
+                                randomFloorType = randomFloorType[0]
+                                Floors.append(CommercialFloor(len(Floors), randomFloorType))
                             if button == 2:
                                 showFloorButtons = False
                             showFloorButtons = False
@@ -410,16 +448,19 @@ while True:
     if floorMenu != -1:
         manageFloorMenu.draw(root)
         if isinstance(Floors[floorMenu], CommercialFloor):
-            Image(90, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[0].name + " " + Floors[floorMenu].products[0].price + ".png"))
-            Text(100, 300, str(Floors[floorMenu].stock[0]), (0, 0, 0)).draw(root)
-            Image(150, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[1].name + " " + Floors[floorMenu].products[1].price + ".png"))
-            Text(160, 300, str(Floors[floorMenu].stock[1]), (0, 0, 0)).draw(root)
-            Image(210, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[2].name + " " + Floors[floorMenu].products[2].price + ".png"))
-            Text(220, 300, str(Floors[floorMenu].stock[2]), (0, 0, 0)).draw(root)
-            Button(75, 200, 200, 30, (0, 255, 0), "Manage Employees").draw(root)
+            Image(90, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[0].name + ".png"))
+            Text(100, 250, str(Floors[floorMenu].products[0].name), (0, 0, 0)).draw(root)
+            smallText(100, 300, str(Floors[floorMenu].stock[0]), (0, 0, 0)).draw(root)
+            Image(150, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[1].name + ".png"))
+            Text(150, 250, str(Floors[floorMenu].products[1].name), (0, 0, 0)).draw(root)
+            smallText(160, 300, str(Floors[floorMenu].stock[1]), (0, 0, 0)).draw(root)
+            Image(210, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[2].name + ".png"))
+            Text(210, 250, str(Floors[floorMenu].products[2].name), (0, 0, 0)).draw(root)
+            smallText(220, 300, str(Floors[floorMenu].stock[2]), (0, 0, 0)).draw(root)
+            Button(150, 180, 50, 50, bgImage=pygame.image.load("images/placeholderbox.png")).draw(root)
         
         if isinstance(Floors[floorMenu], ResidentialFloor):
-            Button(75, 200, 200, 30, (0, 255, 0), "Manage Residents").draw(root)
+            # Button(75, 200, 200, 30, (0, 255, 0), "Manage Residents").draw(root)
             for i in range(len(Floors[floorMenu].occupants)):
                 # place citizen images in each box 
                 Floors[floorMenu].occupants[i].draw(root, 100 + (CitizenAppearance.CitizenSize * i * 2), 250)
@@ -482,7 +523,6 @@ while True:
         for floor in Floors:
             if isinstance(floor, ResidentialFloor):
                 for citizen in range(len(floor.occupants)):
-
                     # citizens move randomly
                     if tick % 100 == 0:
                         floor.occupants[citizen].speed = random.choice([-1, 0, 0, 1])
@@ -509,6 +549,7 @@ while True:
         for citizen in Citizens:
             money += 10
 
+    
     # update display
     pygame.display.update()
     clock.tick(FPS)
