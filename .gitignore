@@ -160,3 +160,6 @@ cython_debug/
 #.idea/
 .DS_Store
 images/.DS_Store
+.DS_Store
+images/.DS_Store
+images/skin/.DS_Store

@@ -14,6 +14,7 @@ pygame.display.set_caption("Stack Overflow Skyscraper")
 # game variables
 FPS = 60
 clock = pygame.time.Clock()
+timer = 0
 
 display_width = 350
 display_height = 600
@@ -24,19 +25,23 @@ citizenX = 10
 font = pygame.font.Font("pixeloid.ttf", 20)
 smallfont = pygame.font.Font("pixeloid.ttf", 15)
 
-money = 100000
+money = 0
 tick = 0
 
 menuOpen = False
 showFloorButtons = False
 showCitizenList = False
 showNewCitizen = False
-sortList = "default"
+sortList = "home"
 floorMenu = -1
+popupText = ""
 
 firstNames = open("FirstNames.txt", "r").read().split("\n")
 lastNames = open("LastNames.txt", "r").read().split("\n")
 residentialNames = open("ResidentialFloors.txt", "r").read().split("\n")
+
+newFloorPrice = 0
+floorPrices = open("NewFloorPrices.txt", "r").read().split("\n")
 
 # image variables
 floorImages = [
@@ -52,6 +57,9 @@ commercialFloorImages = [
     pygame.image.load("images/commerical/com5.png"),
     pygame.image.load("images/commerical/com6.png"),
     pygame.image.load("images/commerical/com7.png"),
+    pygame.image.load("images/commerical/com8.png"),
+    pygame.image.load("images/commerical/com9.png"),
+    pygame.image.load("images/commerical/com10.png"),
 ]
 
 commercialFloorTypes = []
@@ -71,6 +79,39 @@ for image in range(len(commercialFloorImages)):
 
 elevatorImage = pygame.image.load("images/elevator.png")
 elevatorImage = pygame.transform.scale(elevatorImage, (300, 100))
+
+def jobSort(list):
+    # sort citizens by job floor
+    sortedList = []
+    for i in range(len(list)):
+        sortedList.append(list[i])
+        for j in range(len(sortedList)):
+            if sortedList[j].jobFloor > sortedList[i].jobFloor:
+                sortedList[i], sortedList[j] = sortedList[j], sortedList[i]
+
+    return sortedList
+
+def alphaSort(list):
+    # sort citizen names alphabetically
+    sortedList = []
+    for i in range(len(list)):
+        sortedList.append(list[i])
+        for j in range(len(sortedList)):
+            if sortedList[j].name > sortedList[i].name:
+                sortedList[i], sortedList[j] = sortedList[j], sortedList[i]
+
+    return sortedList
+
+def homeSort(list):
+    # sort citizens by home floor
+    sortedList = []
+    for i in range(len(list)):
+        sortedList.append(list[i])
+        for j in range(len(sortedList)):
+            if sortedList[j].homeFloor > sortedList[i].homeFloor:
+                sortedList[i], sortedList[j] = sortedList[j], sortedList[i]
+
+    return sortedList
 
 # ui classes 
 class Button:
@@ -168,7 +209,6 @@ for line in open("CommercialFloors.txt", "r").read().split("\n"):
             productTitle = productTitle.lower()
             if os.path.exists("images/products/" + productTitle + ".png"):
                 commercialFloorTypes[-1][i] = Product(productTitle, productTitle.split(" ")[-1], pygame.image.load("images/products/" + productTitle + ".png"))
-
             else:
                 commercialFloorTypes[-1][i] = Product("placeholder", "0", pygame.image.load("images/closebutton.png"))
 
@@ -197,11 +237,11 @@ class ResidentialFloor(Floor):
         self.title = title + " Apts."
 
 class CommercialFloor(Floor):
-    RESTOCKING_PRICE = 100
+
     def __init__(self, floor_number, type):
         super().__init__(floor_number)
         self.floor_color = (0, 255, 0)
-        self.employees = []
+        self.employee = None
         self.products = [None, None, None]
         self.stock = [0, 0, 0]
     
@@ -214,10 +254,44 @@ class CommercialFloor(Floor):
                 break
 
     def restock(self, product):
+        """Each Commercial floor sells three types of stock. The first stocked item sells for one coin each, the second for two and the third for three. 
+        For each item, the base cost to stock the item is 60% of the amount of the item received."""
         global money
-        if money >= CommercialFloor.RESTOCKING_PRICE:
-            money -= CommercialFloor.RESTOCKING_PRICE
-            self.stock[self.products.index(product)] += 10
+
+        if product == self.products[0]:
+            productPrice = 40
+        if product == self.products[1]:
+            productPrice = 80
+        if product == self.products[2]:
+            productPrice = 120
+            
+        if money >= productPrice and self.stock[self.products.index(product)] == 0:
+            self.stock[self.products.index(product)] = 144 * (1 + self.products.index(product))
+            money -= int(productPrice)
+
+    def sell(self):
+        """Each stock is sold at a constant rate of 12 coins per minute. This means a fully stocked floor generates 36 coins per minute.
+        A 1-coin item is sold every 5 seconds, a 2-coin item every 10 seconds and a 3-coin item every 15 seconds."""
+
+        global money
+        global timer
+
+        for floor in Floors:
+            if isinstance(floor, CommercialFloor):
+                for i in range(len(floor.stock)):
+                    if floor.stock[i] > 0:
+                        if i == 0 and timer % 300 == 0:
+                            money += 12
+                            floor.stock[i] -= 1
+                        if i == 1 and timer % 600 == 0:
+                            money += 12
+                            floor.stock[i] -= 1 
+                        if i == 2 and timer % 900 == 0:
+                            money += 12
+                            floor.stock[i] -= 1
+        timer += 1
+
+
 
 class LobbyFloor(Floor):
     def __init__(self, floor_number):
@@ -279,13 +353,53 @@ def randomizeCitizen(homeFloor, jobFloor):
 
     return Citizen(name, homeFloor, jobFloor, appearance)
 
+def CitizenPicker():
+    # opens a list of citizens and returns a citizen object from user selection
+    sortedList = []
+    if sortList == "job":
+        sortedList = Citizens
+    elif sortList == "alphabetical":
+        sortedList = alphaSort(Citizens)
+    elif sortList == "home":
+        sortedList = homeSort(Citizens)
+
+    citizenListMenu.draw(root)
+
+    for i in range(len(sortedList)):
+        pygame.draw.rect(root, (255, 255, 255), (10, 100 + (i * 50), 330, 50))
+        pygame.draw.rect(root, (0, 0, 0), (10, 100 + (i * 50), 330, 50), 4)
+
+        sortedList[i].draw(root, 15, 110 + (i * 50))
+
+        text = font.render(sortedList[i].name, True, (0, 0, 0))
+        root.blit(text, (70, 110 + (i * 50)))
+
+        root.blit(pygame.image.load("images/houseicon.png"), (170, 118 + (i * 50)))
+        text = smallfont.render(str(sortedList[i].homeFloor), True, (0, 0, 0))
+        root.blit(text, (200, 118 + (i * 50)))
+
+        root.blit(pygame.image.load("images/workicon.png"), (260, 118 + (i * 50)))
+        text = smallfont.render(str(sortedList[i].jobFloor), True, (0, 0, 0))
+        root.blit(text, (290, 118 + (i * 50)))
+
+
+    if sortList == "job":
+        root.blit(pygame.image.load("images/jobbuttonpushed.png"), (177.5, 47.5))
+    elif sortList == "alphabetical":
+        root.blit(pygame.image.load("images/alphabetbuttonpushed.png"), (227.5, 47.5))
+    elif sortList == "home":
+        root.blit(pygame.image.load("images/housebuttonpushed.png"), (277.5, 47.5))
+
 Floors = [LobbyFloor(0), ResidentialFloor(1, floorImages[0], "Canterbury"), CommercialFloor(2, type="Grocery Store")]
 Citizens = [Citizen("Michael", 2, 1, CitizenAppearance("clothes7", "hair9", "eyes1", "skin7")), 
             Citizen("George", 2, 1, CitizenAppearance("clothes1", "hair1", "eyes2", "skin1")),
+            Citizen("Amy", 2, 3, CitizenAppearance("clothes2", "hair2", "eyes3", "skin2")),
+            Citizen("Zorin", 2, 3, CitizenAppearance("clothes3", "hair3", "eyes4", "skin3")),
             ]
 
 # game loop
 while True:
+    startTime = time.perf_counter()
     # button declarations
     buttons = [
         Button(0, 0, display_width, 50, (200, 200, 200), "Menu", pygame.image.load("images/topbar.png")),
@@ -297,7 +411,11 @@ while True:
     newFloorMenu = Menu(50, 110, pygame.image.load("images/boxwindow.png"), [
         Button(75, 200, 200, 50, (255, 0, 0), "Residential", pygame.image.load("images/orangebutton.png")),
         Button(75, 260, 200, 50, (0, 255, 0), "Commercial", pygame.image.load("images/greenbutton.png")),
-        Button(75, 140, 35, 35, (255, 255, 255), bgImage=pygame.image.load("images/closebutton.png"))
+        Button(75, 140, 35, 35, (255, 255, 255), bgImage=pygame.image.load("images/closebutton.png")),
+        Text(130, 140, "New floor", (255, 255, 255)),
+        Button(125, 170, 20, 20, bgImage=pygame.image.load("images/coin.png")),
+        smallText(150, 170, str(newFloorPrice), (255, 255, 255)),
+        
     ])
 
     manageFloorMenu = Menu(50, 110, pygame.image.load("images/boxwindow.png"), [
@@ -311,6 +429,9 @@ while True:
     citizenListMenu = Menu(0, 0, pygame.image.load("images/purplebg.png"), [
         Button(10, 50, 35, 35, (255, 255, 255), bgImage=pygame.image.load("images/closebutton.png")),
         Text(70, 55, "Sort by:", (255, 255, 255)),
+        Button(177.5, 47.5, 30, 30, (255, 255, 255), bgImage=pygame.image.load("images/jobbutton.png")),
+        Button(227.5, 47.5, 30, 30, (255, 255, 255), bgImage=pygame.image.load("images/alphabetbutton.png")),
+        Button(277.5, 47.5, 30, 30, (255, 255, 255), bgImage=pygame.image.load("images/housebutton.png")),
     ])
 
     newCitizenMenu = Menu(50, 110, pygame.image.load("images/boxwindow.png"), [
@@ -319,6 +440,11 @@ while True:
         Button(150, 200, 200, 30, (0, 255, 0), bgImage=pygame.image.load("images/placeholderbox.png")),
         Button(75, 275, 95, 30, (255, 0, 0), "Deny"),
         Button(180, 275, 95, 30, (0, 255, 0), "Lease"),
+    ])
+    
+    popupMenu = Menu(50, 110, pygame.image.load("images/boxwindow.png"), [
+        Text(75, 140, popupText, (255, 255, 255)),
+        Button(100, 260, 150, 50, (0, 255, 0), bgImage=pygame.image.load("images/okbutton.png")),
     ])
 
 
@@ -356,7 +482,12 @@ while True:
                     for button in range(len(newFloorMenu.buttons)):
                         if newFloorMenu.buttons[button].is_clicked(pos):
                             if button == 0:
-                                Floors.append(ResidentialFloor(len(Floors), random.choice(floorImages), random.choice(residentialNames)))
+                                if money >= newFloorPrice:
+                                    Floors.append(ResidentialFloor(len(Floors), random.choice(floorImages), random.choice(residentialNames)))
+                                    money -= newFloorPrice
+                                    newFloorPrice = int(floorPrices[len(Floors) - 1])
+                                else:
+                                    popupText = "Not enough money!"
                             if button == 1:
                                 # get random commercial floor type
                                 randomFloorType = random.choice(commercialFloorTypes)
@@ -368,6 +499,10 @@ while True:
                             menuOpen = False
                     break
                             
+                if popupText != "":
+                    if popupMenu.buttons[1].is_clicked(pos):
+                        popupText = ""
+                        break
 
                 if showCitizenList:
                     if citizenListMenu.buttons[0].is_clicked(pos):
@@ -408,19 +543,36 @@ while True:
                                     Floors[floorMenu].restock(Floors[floorMenu].products[2])
 
                             break
+
+                # citizen list menu
+                if showCitizenList:
+                    for button in range(len(citizenListMenu.buttons)):
+                        if citizenListMenu.buttons[button].is_clicked(pos):
+                            if button == 0:
+                                showCitizenList = False
+                                menuOpen = False
+                            if button == 2:
+                                sortList = "job"
+                            if button == 3:
+                                sortList = "alphabetical"
+                            if button == 4:
+                                sortList = "home"
+                            break
                                     
 
     # blit background image based on scrollY
     root.fill((255, 255, 255))
     root.blit(pygame.image.load("images/Background-day.jpeg"), (0, scrollY / 10 - 4150))
 
-    # allocate citizens to citizen floors
+    # allocate citizens to floors
     for citizen in Citizens:
         for floor in Floors:
-            if floor.floor_number == citizen.jobFloor and citizen not in floor.employees:
-                floor.employees.append(citizen)
-            if floor.floor_number == citizen.homeFloor and citizen not in floor.occupants:
-                floor.occupants.append(citizen)
+            if isinstance(floor, ResidentialFloor):
+                if floor.floor_number == citizen.homeFloor and citizen not in floor.occupants:
+                    floor.occupants.append(citizen)
+            if isinstance(floor, CommercialFloor):
+                if floor.floor_number == citizen.jobFloor and floor.employee == None:
+                    floor.employee = citizen
 
     BAR_HEIGHT = 25
     # draw floors based on scrollY
@@ -437,86 +589,12 @@ while True:
         # draw floor title bar above floor
         pygame.draw.rect(root, (0, 0, 0), (floor.floor_x, floor.floor_y + scrollY - BAR_HEIGHT, floor.floor_width, BAR_HEIGHT))
         # draw floor number
-        text = smallfont.render(str(floor.floor_number), True, (255, 255, 255))
+        text = smallfont.render(str(floor.floor_number) + "  " + str(floor.title), True, (255, 255, 255))
         root.blit(text, (floor.floor_x + 10, floor.floor_y + scrollY + 3 - BAR_HEIGHT))
-        # draw floor title
-        if floor.title != None:
-            text = smallfont.render(str(floor.title), True, (255, 255, 255))
-            root.blit(text, (floor.floor_x + 30, floor.floor_y + scrollY + 3 - BAR_HEIGHT))
-
-    # draw floor menu
-    if floorMenu != -1:
-        manageFloorMenu.draw(root)
-        if isinstance(Floors[floorMenu], CommercialFloor):
-            Image(90, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[0].name + ".png"))
-            Text(100, 250, str(Floors[floorMenu].products[0].name), (0, 0, 0)).draw(root)
-            smallText(100, 300, str(Floors[floorMenu].stock[0]), (0, 0, 0)).draw(root)
-            Image(150, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[1].name + ".png"))
-            Text(150, 250, str(Floors[floorMenu].products[1].name), (0, 0, 0)).draw(root)
-            smallText(160, 300, str(Floors[floorMenu].stock[1]), (0, 0, 0)).draw(root)
-            Image(210, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[2].name + ".png"))
-            Text(210, 250, str(Floors[floorMenu].products[2].name), (0, 0, 0)).draw(root)
-            smallText(220, 300, str(Floors[floorMenu].stock[2]), (0, 0, 0)).draw(root)
-            Button(150, 180, 50, 50, bgImage=pygame.image.load("images/placeholderbox.png")).draw(root)
-        
-        if isinstance(Floors[floorMenu], ResidentialFloor):
-            # Button(75, 200, 200, 30, (0, 255, 0), "Manage Residents").draw(root)
-            for i in range(len(Floors[floorMenu].occupants)):
-                # place citizen images in each box 
-                Floors[floorMenu].occupants[i].draw(root, 100 + (CitizenAppearance.CitizenSize * i * 2), 250)
-
-                
-    # draw buttons
-    for button in buttons:
-        button.draw(root)
-
-    if showFloorButtons:
-        newFloorMenu.draw(root)
-
-    if showNewCitizen:
-        newCitizenMenu.draw(root)
-
-    if showCitizenList:
-        sortedList = []
-        if sortList == "default":
-            sortedList = Citizens
-        elif sortList == "alphabetical":
-            sortedList = sorted(Citizens, key=lambda citizen: citizen.name)
-        elif sortList == "home":
-            sortedList = sorted(Citizens, key=lambda citizen: citizen.homeFloor)
-
-        citizenListMenu.draw(root)
-
-        for i in range(len(sortedList)):
-            pygame.draw.rect(root, (255, 255, 255), (10, 100 + (i * 50), 330, 50))
-            pygame.draw.rect(root, (0, 0, 0), (10, 100 + (i * 50), 330, 50), 4)
-
-            sortedList[i].draw(root, 15, 110 + (i * 50))
-
-            text = font.render(Citizens[i].name, True, (0, 0, 0))
-            root.blit(text, (70, 110 + (i * 50)))
-
-        if sortList == "default":
-            pygame.draw.rect(root, (0, 255, 0), (177.5, 47.5, 35, 35))
-        elif sortList == "alphabetical":
-            pygame.draw.rect(root, (0, 255, 0), (227.5, 47.5, 35, 35))
-        elif sortList == "home":
-            pygame.draw.rect(root, (0, 255, 0), (277.5, 47.5, 35, 35))
-
-        Button(180, 50, 30, 30, (255, 255, 255), "def").draw(root)
-        Button(230, 50, 30, 30, (255, 255, 255), "a-z").draw(root)
-        Button(280, 50, 30, 30, (255, 255, 255), "home").draw(root)
-
-    # menu bar items
-    root.blit(pygame.image.load("images/coin.png"), (10, 12))
-    text = font.render(str(round(money)), True, (255, 255, 255))
-    root.blit(text, (35, 10))
-
-    # draw scroll bar
-    pygame.draw.rect(root, (200, 200, 200), (display_width - 5, (-scrollY / 10 + display_height - 50), 10, 50))
-
-    # --- game logic ---
-    # citizen movement
+        # # draw floor title
+        # if floor.title != None:
+        #     text = smallfont.render(str(floor.title), True, (255, 255, 255))
+        #     root.blit(text, (floor.floor_x + 30, floor.floor_y + scrollY + 3 - BAR_HEIGHT))
 
     # draw citizens
     if not showCitizenList:
@@ -543,13 +621,76 @@ while True:
                     floor.occupants[citizen].draw(root, floor.floor_x + floor.occupants[citizen].xPos + (CitizenAppearance.CitizenSize * citizen), floor.floor_y + scrollY + 90 - CitizenAppearance.CitizenSize)
 
 
-    # --- economy ---
-    # collect rent every 150 ticks
-    if tick % 150 == 0:
-        for citizen in Citizens:
-            money += 10
+    # draw floor menu
+    if floorMenu != -1:
+        manageFloorMenu.draw(root)
+        if isinstance(Floors[floorMenu], CommercialFloor):
+            Image(90, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[0].name + ".png"))
+            Text(100, 250, str(Floors[floorMenu].products[0].name), (0, 0, 0)).draw(root)
+            smallText(100, 310, str(Floors[floorMenu].stock[0]), (0, 0, 0)).draw(root)
+            pygame.draw.rect(root, (255, 255, 255), (90, 300, 50, 10))
+            pygame.draw.rect(root, (0, 255, 0), (90, 300, (Floors[floorMenu].stock[0]/144*50), 10))
 
-    
+            Image(150, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[1].name + ".png"))
+            Text(150, 250, str(Floors[floorMenu].products[1].name), (0, 0, 0)).draw(root)
+            smallText(160, 310, str(Floors[floorMenu].stock[1]), (0, 0, 0)).draw(root)
+            pygame.draw.rect(root, (255, 255, 255), (150, 300, 50, 10))
+            pygame.draw.rect(root, (0, 255, 0), (150, 300, (Floors[floorMenu].stock[1]/288*50), 10))
+
+            Image(210, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[2].name + ".png"))
+            Text(210, 250, str(Floors[floorMenu].products[2].name), (0, 0, 0)).draw(root)
+            smallText(220, 310, str(Floors[floorMenu].stock[2]), (0, 0, 0)).draw(root)
+            pygame.draw.rect(root, (255, 255, 255), (210, 300, 50, 10))
+            pygame.draw.rect(root, (0, 255, 0), (210, 300, (Floors[floorMenu].stock[2]/432*50), 10))
+
+            Button(150, 180, 50, 50, bgImage=pygame.image.load("images/placeholderbox.png")).draw(root)
+
+            if Floors[floorMenu].employee != None:
+                Floors[floorMenu].employee.draw(root, 160, 190)
+
+        if isinstance(Floors[floorMenu], ResidentialFloor):
+            # Button(75, 200, 200, 30, (0, 255, 0), "Manage Residents").draw(root)
+            for i in range(len(Floors[floorMenu].occupants)):
+                # place citizen images in each box 
+                Floors[floorMenu].occupants[i].draw(root, 100 + (CitizenAppearance.CitizenSize * i * 2), 250)
+
+    # draw popup
+    if popupText != "":
+        popupMenu.draw(root)
+                
+    # draw buttons
+    for button in buttons:
+        button.draw(root)
+
+    if showFloorButtons:
+        newFloorMenu.draw(root)
+
+    if showNewCitizen:
+        newCitizenMenu.draw(root)
+
+    if showCitizenList:
+        CitizenPicker()
+
+    # menu bar items
+    root.blit(pygame.image.load("images/coin.png"), (10, 12))
+    text = font.render(str(round(money)), True, (255, 255, 255))
+    root.blit(text, (35, 10))
+
+    # draw scroll bar
+    pygame.draw.rect(root, (200, 200, 200), (display_width - 5, (-scrollY / 10 + display_height - 50), 10, 50))
+
+    # --- economy ---
+    # # collect rent every 150 ticks
+    # if tick % 150 == 0:
+    #     for citizen in Citizens:
+    #         money += 10
+
+    # Always Be Closing
+    for floor in Floors:
+        if isinstance(floor, CommercialFloor):
+            floor.sell()
+
+
     # update display
     pygame.display.update()
     clock.tick(FPS)
