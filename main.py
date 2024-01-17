@@ -1,6 +1,13 @@
 # Stack Overflow Skyscraper
 # Tiny Tower clone by Michael Vlamis
 
+# TODO: 
+# manage residents
+# manage employees
+# tutorial
+# save/load game
+# final graphics (background, floors, retouch products)
+
 import pygame 
 import random
 import time
@@ -25,16 +32,23 @@ citizenX = 10
 font = pygame.font.Font("pixeloid.ttf", 20)
 smallfont = pygame.font.Font("pixeloid.ttf", 15)
 
-money = 0
+money = 240
+coinspersecond = 0
+lastMoney = 0
 tick = 0
 
 menuOpen = False
 showFloorButtons = False
 showCitizenList = False
 showNewCitizen = False
+showArrows = False
 sortList = "home"
 floorMenu = -1
 popupText = ""
+
+elevatorOpen = False
+unassignedCitizen = None
+selectedFloor = None
 
 firstNames = open("FirstNames.txt", "r").read().split("\n")
 lastNames = open("LastNames.txt", "r").read().split("\n")
@@ -79,6 +93,9 @@ for image in range(len(commercialFloorImages)):
 
 elevatorImage = pygame.image.load("images/elevator.png")
 elevatorImage = pygame.transform.scale(elevatorImage, (300, 100))
+
+elevatorOpenImage = pygame.image.load("images/elevator open.png")
+elevatorOpenImage = pygame.transform.scale(elevatorOpenImage, (300, 100))
 
 def jobSort(list):
     # sort citizens by job floor
@@ -237,7 +254,6 @@ class ResidentialFloor(Floor):
         self.title = title + " Apts."
 
 class CommercialFloor(Floor):
-
     def __init__(self, floor_number, type):
         super().__init__(floor_number)
         self.floor_color = (0, 255, 0)
@@ -291,8 +307,6 @@ class CommercialFloor(Floor):
                             floor.stock[i] -= 1
         timer += 1
 
-
-
 class LobbyFloor(Floor):
     def __init__(self, floor_number):
         super().__init__(floor_number)
@@ -341,7 +355,7 @@ class Citizen:
         root.blit(self.appearance.hairImage, (x, y))
         root.blit(self.appearance.eyesImage, (x, y))
 
-def randomizeCitizen(homeFloor, jobFloor):
+def randomizeCitizen(homeFloor):
     clothes = random.choice(["clothes1", "clothes2", "clothes3", "clothes4", "clothes5", "clothes6", "clothes7", "clothes8", "clothes9", "clothes10"])
     hair = random.choice(["hair1"])
     eyes = random.choice(["eyes1", "eyes2", "eyes3", "eyes4"])
@@ -351,7 +365,7 @@ def randomizeCitizen(homeFloor, jobFloor):
 
     name = random.choice(firstNames) + " " + random.choice(lastNames)
 
-    return Citizen(name, homeFloor, jobFloor, appearance)
+    return Citizen(name, 0, homeFloor, appearance)
 
 def CitizenPicker():
     # opens a list of citizens and returns a citizen object from user selection
@@ -374,13 +388,13 @@ def CitizenPicker():
         text = font.render(sortedList[i].name, True, (0, 0, 0))
         root.blit(text, (70, 110 + (i * 50)))
 
-        root.blit(pygame.image.load("images/houseicon.png"), (170, 118 + (i * 50)))
+        root.blit(pygame.image.load("images/houseicon.png"), (260, 110 + (i * 50)))
         text = smallfont.render(str(sortedList[i].homeFloor), True, (0, 0, 0))
-        root.blit(text, (200, 118 + (i * 50)))
+        root.blit(text, (290, 110 + (i * 50)))
 
-        root.blit(pygame.image.load("images/workicon.png"), (260, 118 + (i * 50)))
+        root.blit(pygame.image.load("images/workicon.png"), (260, 125 + (i * 50)))
         text = smallfont.render(str(sortedList[i].jobFloor), True, (0, 0, 0))
-        root.blit(text, (290, 118 + (i * 50)))
+        root.blit(text, (290, 125 + (i * 50)))
 
 
     if sortList == "job":
@@ -390,12 +404,9 @@ def CitizenPicker():
     elif sortList == "home":
         root.blit(pygame.image.load("images/housebuttonpushed.png"), (277.5, 47.5))
 
-Floors = [LobbyFloor(0), ResidentialFloor(1, floorImages[0], "Canterbury"), CommercialFloor(2, type="Grocery Store")]
-Citizens = [Citizen("Michael", 2, 1, CitizenAppearance("clothes7", "hair9", "eyes1", "skin7")), 
-            Citizen("George", 2, 1, CitizenAppearance("clothes1", "hair1", "eyes2", "skin1")),
-            Citizen("Amy", 2, 3, CitizenAppearance("clothes2", "hair2", "eyes3", "skin2")),
-            Citizen("Zorin", 2, 3, CitizenAppearance("clothes3", "hair3", "eyes4", "skin3")),
-            ]
+Floors = [LobbyFloor(0), ResidentialFloor(1, floorImages[0], "Canterbury")]
+Citizens = []
+citizenProperties = Citizen("placeholder", 0, 0, CitizenAppearance("clothes1", "hair1", "eyes1", "skin1"))
 
 # game loop
 while True:
@@ -433,18 +444,26 @@ while True:
         Button(227.5, 47.5, 30, 30, (255, 255, 255), bgImage=pygame.image.load("images/alphabetbutton.png")),
         Button(277.5, 47.5, 30, 30, (255, 255, 255), bgImage=pygame.image.load("images/housebutton.png")),
     ])
-
-    newCitizenMenu = Menu(50, 110, pygame.image.load("images/boxwindow.png"), [
-        Text(75, 140, "New Citizen!", (255, 255, 255)),
-        smallText(75, 160, "Name", (255, 255, 255)),
-        Button(150, 200, 200, 30, (0, 255, 0), bgImage=pygame.image.load("images/placeholderbox.png")),
-        Button(75, 275, 95, 30, (255, 0, 0), "Deny"),
-        Button(180, 275, 95, 30, (0, 255, 0), "Lease"),
-    ])
     
     popupMenu = Menu(50, 110, pygame.image.load("images/boxwindow.png"), [
-        Text(75, 140, popupText, (255, 255, 255)),
+        # split text into multiple (max three) lines, separated by spaces if it's too long
+        Text(75, 140, popupText[:popupText.find(" ", 18)], (255, 255, 255)),
+        Text(75, 160, popupText[popupText.find(" ", 18):popupText.find(" ", 36)], (255, 255, 255)),
+        Text(75, 180, popupText[popupText.find(" ", 36):], (255, 255, 255)),
         Button(100, 260, 150, 50, (0, 255, 0), bgImage=pygame.image.load("images/okbutton.png")),
+    ])
+
+    floorArrowsMenu = Menu(50, 120, pygame.image.load("images/buttonholder.png"), [
+        Button(69, 137, 98, 83, (255, 255, 255), bgImage=pygame.image.load("images/uparrow.png")),
+        Button(179, 137, 98, 83, (255, 255, 255), bgImage=pygame.image.load("images/downarrow.png")),
+        Button(100, 250, 150, 50, (255, 255, 255), bgImage=pygame.image.load("images/okbutton.png")),
+    ])
+
+    citizenPropertiesMenu = Menu(50, 110, pygame.image.load("images/boxwindow.png"), [
+        Button(75, 140, 35, 35, (255, 255, 255), bgImage=pygame.image.load("images/closebutton.png")),
+        Text(130, 145, citizenProperties.name, (255, 255, 255)),
+        Button(90, 240, 50, 50, (255, 0, 0), text="Evict"),
+        Button(150, 240, 50, 50, (255, 0, 0), text="Relocate"),
     ])
 
 
@@ -487,12 +506,18 @@ while True:
                                     money -= newFloorPrice
                                     newFloorPrice = int(floorPrices[len(Floors) - 1])
                                 else:
+                                    menuOpen = True
                                     popupText = "Not enough money!"
                             if button == 1:
-                                # get random commercial floor type
-                                randomFloorType = random.choice(commercialFloorTypes)
-                                randomFloorType = randomFloorType[0]
-                                Floors.append(CommercialFloor(len(Floors), randomFloorType))
+                                if money >= newFloorPrice:
+                                    randomFloorType = random.choice(commercialFloorTypes)
+                                    randomFloorType = randomFloorType[0]
+                                    Floors.append(CommercialFloor(len(Floors), randomFloorType))
+                                    money -= newFloorPrice
+                                    newFloorPrice = int(floorPrices[len(Floors) - 1])
+                                else:
+                                    menuOpen = True
+                                    popupText = "Not enough money!"
                             if button == 2:
                                 showFloorButtons = False
                             showFloorButtons = False
@@ -500,7 +525,7 @@ while True:
                     break
                             
                 if popupText != "":
-                    if popupMenu.buttons[1].is_clicked(pos):
+                    if popupMenu.buttons[3].is_clicked(pos):
                         popupText = ""
                         break
 
@@ -511,14 +536,33 @@ while True:
                         break
 
                 if showNewCitizen:
-                    if newCitizenMenu.buttons[3].is_clicked(pos):
+                    if newCitizenMenu.buttons[0].is_clicked(pos):
+                        showArrows = True
+                        menuOpen = True
+                        selectedFloor = 0
+                        break
+
+                if showArrows:
+                    if floorArrowsMenu.buttons[0].is_clicked(pos): # up arrow
+                        if selectedFloor < len(Floors) - 1:
+                            selectedFloor += 1
+                            scrollY += 100 + BAR_HEIGHT
+                    if floorArrowsMenu.buttons[1].is_clicked(pos): # down arrow
+                        if selectedFloor > 0:
+                            selectedFloor -= 1
+                            scrollY -= 100 + BAR_HEIGHT
+                        
+                    if floorArrowsMenu.buttons[2].is_clicked(pos):
+                        if selectedFloor != 0 and isinstance(Floors[selectedFloor], ResidentialFloor):
+                            Citizens.append(randomizeCitizen(selectedFloor))
+                        # check if floor is residential
+                        if isinstance(Floors[selectedFloor], CommercialFloor):
+                            popupText = "Citizens can't live on commercial floors!"
+                        showArrows = False
                         showNewCitizen = False
+                        selectedFloor = None
                         menuOpen = False
-                    if newCitizenMenu.buttons[4].is_clicked(pos):
-                        showNewCitizen = False
-                        menuOpen = False
-                        Citizens.append(randomizeCitizen(1, 2))
-                    break
+                        break
 
                 # floor management menu
                 for floor in Floors:
@@ -533,6 +577,31 @@ while True:
                             if button == 0:
                                 floorMenu = -1
                                 menuOpen = False
+
+                            if isinstance(Floors[floorMenu], ResidentialFloor):
+                                if button == 2:
+                                    # if empty, show citizen picker, else show citizen properties
+                                    if len(Floors[floorMenu].occupants) == 0:
+                                        showCitizenList = True
+                                        menuOpen = True
+                                    else:
+                                        citizenProperties = Floors[floorMenu].occupants[0]
+                                        menuOpen = True
+                                if button == 3:
+                                    if len(Floors[floorMenu].occupants) == 0:
+                                        showCitizenList = True
+                                        menuOpen = True
+                                    else:
+                                        citizenProperties = Floors[floorMenu].occupants[1]
+                                        menuOpen = True
+                                if button == 4:
+                                    if len(Floors[floorMenu].occupants) == 0:
+                                        showCitizenList = True
+                                        menuOpen = True
+                                    else:
+                                        citizenProperties = Floors[floorMenu].occupants[2]
+                                        menuOpen = True
+                                        
 
                             if isinstance(Floors[floorMenu], CommercialFloor):
                                 if button == 2:
@@ -558,6 +627,23 @@ while True:
                             if button == 4:
                                 sortList = "home"
                             break
+
+                # citizen properties menu
+                if citizenProperties.name != "placeholder":
+                    for button in range(len(citizenPropertiesMenu.buttons)):
+                        if citizenPropertiesMenu.buttons[button].is_clicked(pos):
+                            if button == 0:
+                                citizenProperties = Citizen("placeholder", 0, 0, CitizenAppearance("clothes1", "hair1", "eyes1", "skin1"))
+                                menuOpen = False
+                            if button == 1:
+                                # evict citizen
+                                Floors[citizenProperties.homeFloor].occupants.remove(citizenProperties)
+                                Citizens.remove(citizenProperties)
+                                citizenPropertiesMenu = Citizen("placeholder", 0, 0, CitizenAppearance("clothes1", "hair1", "eyes1", "skin1"))
+                                menuOpen = False
+                            if button == 2:
+                                # relocate citizen
+                                print("relocate")
                                     
 
     # blit background image based on scrollY
@@ -568,6 +654,7 @@ while True:
     for citizen in Citizens:
         for floor in Floors:
             if isinstance(floor, ResidentialFloor):
+                # print(citizen.homeFloor, floor.floor_number)
                 if floor.floor_number == citizen.homeFloor and citizen not in floor.occupants:
                     floor.occupants.append(citizen)
             if isinstance(floor, CommercialFloor):
@@ -587,7 +674,10 @@ while True:
         root.blit(elevatorImage, (floor.floor_x, floor.floor_y + scrollY))
 
         # draw floor title bar above floor
-        pygame.draw.rect(root, (0, 0, 0), (floor.floor_x, floor.floor_y + scrollY - BAR_HEIGHT, floor.floor_width, BAR_HEIGHT))
+        if selectedFloor != floor.floor_number:
+            pygame.draw.rect(root, (0, 0, 0), (floor.floor_x, floor.floor_y + scrollY - BAR_HEIGHT, floor.floor_width, BAR_HEIGHT))
+        else:
+            pygame.draw.rect(root, (0, 255, 0), (floor.floor_x, floor.floor_y + scrollY - BAR_HEIGHT, floor.floor_width, BAR_HEIGHT))
         # draw floor number
         text = smallfont.render(str(floor.floor_number) + "  " + str(floor.title), True, (255, 255, 255))
         root.blit(text, (floor.floor_x + 10, floor.floor_y + scrollY + 3 - BAR_HEIGHT))
@@ -620,30 +710,30 @@ while True:
                         
                     floor.occupants[citizen].draw(root, floor.floor_x + floor.occupants[citizen].xPos + (CitizenAppearance.CitizenSize * citizen), floor.floor_y + scrollY + 90 - CitizenAppearance.CitizenSize)
 
-
     # draw floor menu
     if floorMenu != -1:
         manageFloorMenu.draw(root)
         if isinstance(Floors[floorMenu], CommercialFloor):
             Image(90, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[0].name + ".png"))
-            Text(100, 250, str(Floors[floorMenu].products[0].name), (0, 0, 0)).draw(root)
+            # Text(100, 250, str(Floors[floorMenu].products[0].name), (0, 0, 0)).draw(root)
             smallText(100, 310, str(Floors[floorMenu].stock[0]), (0, 0, 0)).draw(root)
             pygame.draw.rect(root, (255, 255, 255), (90, 300, 50, 10))
             pygame.draw.rect(root, (0, 255, 0), (90, 300, (Floors[floorMenu].stock[0]/144*50), 10))
 
             Image(150, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[1].name + ".png"))
-            Text(150, 250, str(Floors[floorMenu].products[1].name), (0, 0, 0)).draw(root)
+            # Text(150, 250, str(Floors[floorMenu].products[1].name), (0, 0, 0)).draw(root)
             smallText(160, 310, str(Floors[floorMenu].stock[1]), (0, 0, 0)).draw(root)
             pygame.draw.rect(root, (255, 255, 255), (150, 300, 50, 10))
             pygame.draw.rect(root, (0, 255, 0), (150, 300, (Floors[floorMenu].stock[1]/288*50), 10))
 
             Image(210, 240, pygame.image.load("images/products/" + Floors[floorMenu].products[2].name + ".png"))
-            Text(210, 250, str(Floors[floorMenu].products[2].name), (0, 0, 0)).draw(root)
+            # Text(210, 250, str(Floors[floorMenu].products[2].name), (0, 0, 0)).draw(root)
             smallText(220, 310, str(Floors[floorMenu].stock[2]), (0, 0, 0)).draw(root)
             pygame.draw.rect(root, (255, 255, 255), (210, 300, 50, 10))
             pygame.draw.rect(root, (0, 255, 0), (210, 300, (Floors[floorMenu].stock[2]/432*50), 10))
 
             Button(150, 180, 50, 50, bgImage=pygame.image.load("images/placeholderbox.png")).draw(root)
+            
 
             if Floors[floorMenu].employee != None:
                 Floors[floorMenu].employee.draw(root, 160, 190)
@@ -654,9 +744,18 @@ while True:
                 # place citizen images in each box 
                 Floors[floorMenu].occupants[i].draw(root, 100 + (CitizenAppearance.CitizenSize * i * 2), 250)
 
+        if isinstance(Floors[floorMenu], LobbyFloor):
+            root.blit(pygame.image.load("images/boxwindow.png"), (50, 200), (0, 100, 300, 150))
+            Text(75, 180, "Tower Stats", (255, 255, 255)).draw(root)
+            smallText(75, 210, "Floors: " + str(len(Floors)), (255, 255, 255)).draw(root)
+            smallText(75, 230, "Residents: " + str(len(Citizens)), (255, 255, 255)).draw(root)
+            smallText(75, 250, "Coins per second: " + str(round(coinspersecond, 2)), (255, 255, 255)).draw(root)
+            # draw bottom half crop of boxwindow.png to cover up bottom of floor menu
+
     # draw popup
     if popupText != "":
         popupMenu.draw(root)
+        # menuOpen = True
                 
     # draw buttons
     for button in buttons:
@@ -666,10 +765,24 @@ while True:
         newFloorMenu.draw(root)
 
     if showNewCitizen:
-        newCitizenMenu.draw(root)
+        silhouette = pygame.image.load("images/silhouette.png")
+        silhouette = pygame.transform.scale(silhouette, (CitizenAppearance.CitizenSize, CitizenAppearance.CitizenSize))
 
+        newCitizenMenu = Menu(25, 500 + scrollY, elevatorOpenImage, [
+            Button(65, 550 + scrollY, CitizenAppearance.CitizenSize, CitizenAppearance.CitizenSize, bgImage=silhouette),
+        ])
+
+        newCitizenMenu.draw(root)
+        
     if showCitizenList:
         CitizenPicker()
+
+    if showArrows:
+        floorArrowsMenu.draw(root)
+
+    if citizenProperties.name != "placeholder":
+        citizenPropertiesMenu.draw(root)
+        citizenProperties.draw(root, 100, 180)
 
     # menu bar items
     root.blit(pygame.image.load("images/coin.png"), (10, 12))
@@ -680,16 +793,24 @@ while True:
     pygame.draw.rect(root, (200, 200, 200), (display_width - 5, (-scrollY / 10 + display_height - 50), 10, 50))
 
     # --- economy ---
-    # # collect rent every 150 ticks
-    # if tick % 150 == 0:
-    #     for citizen in Citizens:
-    #         money += 10
+    # collect rent every 150 ticks
+    if tick % 150 == 0:
+        for citizen in Citizens:
+            money += 10
 
     # Always Be Closing
     for floor in Floors:
-        if isinstance(floor, CommercialFloor):
+        if isinstance(floor, CommercialFloor) and floor.employee != None:
             floor.sell()
 
+    # every 10 seconds, generate a new citizen
+    if tick % 600 == 0 and tick != 0:
+        showNewCitizen = True
+
+    # check difference in money every 10 ticks
+    if tick % 10 == 0:
+        coinspersecond = (money - lastMoney) / 10
+        lastMoney = money
 
     # update display
     pygame.display.update()
