@@ -1,16 +1,11 @@
 # Stack Overflow Skyscraper
 # Tiny Tower clone by Michael Vlamis
 
-# TODO: 
-# save/load game
-# final graphics (background)
-
 import pygame 
 import random
 import time
 import os
 import numpy as np
-import pickle
 
 # pygame initialization
 pygame.init()
@@ -80,16 +75,16 @@ floorImages = [
 ]
 
 commercialFloorImages = [
-    pygame.image.load("images/commerical/com1.png"),
-    pygame.image.load("images/commerical/com2.png"),
-    pygame.image.load("images/commerical/com3.png"),
-    pygame.image.load("images/commerical/com4.png"),
-    pygame.image.load("images/commerical/com5.png"),
-    pygame.image.load("images/commerical/com6.png"),
-    pygame.image.load("images/commerical/com7.png"),
-    pygame.image.load("images/commerical/com8.png"),
-    pygame.image.load("images/commerical/com9.png"),
-    pygame.image.load("images/commerical/com10.png"),
+    pygame.image.load("images/commerical/commerical1.png"),
+    pygame.image.load("images/commerical/commerical2.png"),
+    pygame.image.load("images/commerical/commerical3.png"),
+    pygame.image.load("images/commerical/commerical4.png"),
+    pygame.image.load("images/commerical/commerical5.png"),
+    pygame.image.load("images/commerical/commerical6.png"),
+    pygame.image.load("images/commerical/commerical7.png"),
+    pygame.image.load("images/commerical/commerical8.png"),
+    pygame.image.load("images/commerical/commerical9.png"),
+    pygame.image.load("images/commerical/commerical10.png"),
 ]
 
 commercialFloorTypes = []

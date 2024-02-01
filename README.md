@@ -12,3 +12,4 @@ Tiny Tower clone made with pygame
 - Extras:
     - Customize lobby floor with colour sliders 
     - Intro tutorial
+    - 4 residential floor images and 10 commercial floor types
